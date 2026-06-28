@@ -1,0 +1,31 @@
+kind = "web"
+previewPath = "/"
+title = "Redrob AI Ranker"
+version = "1.0.0"
+id = "artifacts/redrob-frontend"
+router = "path"
+
+[[integratedSkills]]
+name = "react-vite"
+version = "1.0.0"
+
+[[services]]
+name = "web"
+paths = [ "/" ]
+localPort = 21249
+
+[services.development]
+run = "pnpm --filter @workspace/redrob-frontend run dev"
+
+[services.production]
+build = [ "pnpm", "--filter", "@workspace/redrob-frontend", "run", "build" ]
+publicDir = "artifacts/redrob-frontend/dist/public"
+serve = "static"
+
+[[services.production.rewrites]]
+from = "/*"
+to = "/index.html"
+
+[services.env]
+PORT = "21249"
+BASE_PATH = "/"

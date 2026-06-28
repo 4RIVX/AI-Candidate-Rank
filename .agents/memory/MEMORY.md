@@ -1,0 +1,1 @@
+- [Flask on Replit Nix](flask-nix-deploy.md) — sentence-transformers can't install via Nix/UPM; use TF-IDF fallback; absolute paths required in workflow run commands.

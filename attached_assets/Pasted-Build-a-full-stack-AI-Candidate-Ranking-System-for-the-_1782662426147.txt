@@ -1,0 +1,216 @@
+Build a full-stack AI Candidate Ranking System for the Redrob Hackathon challenge. 
+The system ranks job candidates for a Senior AI Engineer role using a 
+multi-dimensional hybrid scoring engine — NOT keyword matching.
+
+=== TECH STACK ===
+- Backend: Python + Flask
+- Frontend: React + Tailwind CSS (Vite)
+- All computation: CPU-only, no external API calls during ranking
+- Libraries: scikit-learn, rank_bm25, sentence-transformers (all-MiniLM-L6-v2), 
+  numpy, pandas, python-dateutil
+
+=== WHAT THE SYSTEM DOES ===
+
+User uploads a candidates JSON or JSONL file (up to 500 candidates for demo).
+The system scores every candidate across 5 dimensions and returns a ranked list 
+with scores and reasoning. User can download the result as a CSV in the exact 
+submission format: candidate_id, rank, score, reasoning.
+
+=== SCORING ENGINE (backend) ===
+
+Implement these 5 scorers in separate Python modules under src/scoring/:
+
+1. semantic_scorer.py
+   - Use sentence-transformers all-MiniLM-L6-v2 (CPU)
+   - Build a text representation from candidate: headline + summary + 
+     career descriptions + skill names
+   - Embed the JD and all candidates
+   - Score = cosine similarity(candidate_embedding, jd_embedding)
+   - Weight: 0.30
+
+2. experience_scorer.py
+   - years_of_experience: ideal range is 5-9 years (score 1.0), 
+     3-5 or 9-12 years (0.7), outside that (0.3)
+   - company_type_score: check career_history companies against 
+     CONSULTING_FIRMS list [TCS, Infosys, Wipro, Accenture, Cognizant, 
+     Capgemini, HCL, Tech Mahindra] — if ALL companies are consulting, 
+     score 0.2; if some product company experience exists, score 0.7; 
+     if primarily product companies, score 1.0
+   - production_ml_score: scan career_history descriptions for keywords 
+     like [deployed, production, shipped, A/B test, inference, latency, 
+     pipeline, serving] — count matches, normalize to 0-1
+   - final = 0.4 * yoe_score + 0.35 * company_score + 0.25 * production_score
+   - Weight: 0.25
+
+3. skill_scorer.py
+   - HARD_REQUIRED skills (embeddings, vector database, sentence-transformers, 
+     FAISS, Pinecone, Weaviate, Qdrant, Milvus, OpenSearch, Elasticsearch, 
+     retrieval, ranking, NDCG, MRR, evaluation framework, Python): 
+     each match worth 0.15, capped at 1.0
+   - NICE_TO_HAVE skills (LoRA, QLoRA, PEFT, fine-tuning, LLM, XGBoost, 
+     learning-to-rank, NLP, open source, distributed systems): 
+     each match worth 0.05, capped at 0.3
+   - PENALTY skills when they dominate (Computer Vision, Speech Recognition, 
+     Robotics, TTS, Image Classification as the ONLY domain): subtract 0.3
+   - Also score skill_assessment_scores from redrob_signals for relevant skills
+   - final = min(1.0, hard_score + nice_score - penalty)
+   - Weight: 0.25
+
+4. behavioral_scorer.py
+   - Parse redrob_signals and compute:
+     a. recency_score: days since last_active_date → 
+        0-30 days=1.0, 31-60=0.8, 61-90=0.6, 91-180=0.3, 180+=0.0
+     b. availability_score: open_to_work_flag(1.0 or 0.3) * 0.5 + 
+        (1 - notice_period_days/180) * 0.5
+     c. engagement_score: recruiter_response_rate * 0.4 + 
+        interview_completion_rate * 0.3 + 
+        min(github_activity_score, 100)/100 * 0.3 
+        (treat github_activity_score=-1 as 0)
+     d. reliability_score: verified_email(+0.1) + verified_phone(+0.1) + 
+        linkedin_connected(+0.1) + profile_completeness_score/100 * 0.7
+   - final = 0.3*recency + 0.25*availability + 0.25*engagement + 0.2*reliability
+   - Weight: 0.20
+
+5. disqualifier.py
+   - Returns a multiplier (0.0 to 1.0) applied to the final score
+   - KEYWORD_STUFFER: if current_title contains any of 
+     [Marketing Manager, HR Manager, Content Writer, Graphic Designer, 
+     Accountant, Sales Executive, Civil Engineer, Mechanical Engineer] 
+     AND skill count of AI keywords > 5 → multiplier = 0.05
+   - CONSULTING_ONLY: if every company in career_history is in CONSULTING_FIRMS 
+     → multiplier = 0.5
+   - RESEARCH_ONLY: if career descriptions contain [PhD, research lab, paper, 
+     published, academic] but ZERO of [deployed, production, users, shipped] 
+     → multiplier = 0.4
+   - HONEYPOT: if years_of_experience > 40 OR if candidate claims 
+     "expert"/"advanced" proficiency in more than 12 completely unrelated 
+     skill domains OR if a career role duration_months > 600 → multiplier = 0.0
+   - LOCATION_PENALTY: if country is not India AND willing_to_relocate is false 
+     → multiplier *= 0.7
+   - Apply the LOWEST multiplier that matches (most severe wins)
+
+=== HYBRID RANKER (src/ranker/hybrid_ranker.py) ===
+
+final_score = (
+  0.30 * semantic_score +
+  0.25 * experience_score +
+  0.25 * skill_score +
+  0.20 * behavioral_score
+) * disqualifier_multiplier
+
+Sort by final_score descending. Assign rank 1 to 100 (or N if fewer candidates).
+For equal scores, tie-break by candidate_id ascending.
+
+=== REASONING GENERATOR (src/ranker/reasoning_generator.py) ===
+
+For each ranked candidate, generate a 1-2 sentence specific reasoning string 
+using ONLY facts from their profile. Format:
+"[current_title] with [years_of_experience]yrs at [company_type] company; 
+[top matching skill or career highlight]; [behavioral note like notice period 
+or engagement]; [any concern if applicable]."
+
+Never hallucinate. If a field is missing, skip it. Vary the structure per candidate.
+
+=== PROJECT STRUCTURE ===
+
+redrob-ranker/
+├── src/
+│   ├── __init__.py
+│   ├── config.py               (all constants: weights, skill lists, company lists)
+│   ├── parsers/
+│   │   ├── __init__.py
+│   │   └── candidate_parser.py (load JSON/JSONL, validate schema, build text repr)
+│   ├── scoring/
+│   │   ├── __init__.py
+│   │   ├── semantic_scorer.py
+│   │   ├── experience_scorer.py
+│   │   ├── skill_scorer.py
+│   │   ├── behavioral_scorer.py
+│   │   └── disqualifier.py
+│   ├── ranker/
+│   │   ├── __init__.py
+│   │   ├── hybrid_ranker.py
+│   │   └── reasoning_generator.py
+│   └── utils/
+│       ├── __init__.py
+│       ├── logger.py            (Python logging module, zero print statements)
+│       └── validators.py        (input validation functions)
+├── tests/
+│   ├── __init__.py
+│   ├── conftest.py              (pytest fixtures with 5 mock candidates)
+│   ├── test_parsers.py
+│   ├── test_scorers.py
+│   ├── test_disqualifier.py
+│   ├── test_ranker.py
+│   └── test_integration.py     (full pipeline: mock candidates → valid CSV)
+├── rank.py                      (CLI: python rank.py --candidates file --out out.csv)
+├── app.py                       (Flask API: POST /rank, GET /health)
+├── frontend/                    (React + Tailwind)
+│   └── src/
+│       ├── App.jsx
+│       ├── components/
+│       │   ├── FileUpload.jsx
+│       │   ├── CandidateCard.jsx
+│       │   ├── ScoreBar.jsx
+│       │   ├── StatsPanel.jsx
+│       │   └── DownloadButton.jsx
+├── requirements.txt             (pinned versions)
+└── README.md
+
+=== FRONTEND UI ===
+
+Left sidebar:
+- Title: "Redrob AI Ranker" with subtitle "Semantic + Behavioral Hybrid (CPU, offline)"
+- File upload area: drag-and-drop JSON or JSONL, shows filename + size after upload
+- "Top N to display" slider: 10 to 100, default 25
+- Big "🚀 Rank Candidates" button (red/purple gradient)
+
+Main panel after ranking:
+- Stats row: 4 cards showing PROFILES LOADED / CANDIDATES RANKED / TOP SCORE / 
+  DISQUALIFIED COUNT
+- Score Distribution: horizontal bar chart showing score distribution
+- Below the chart: RANKED CANDIDATE LIST — each candidate shows as a card with:
+  * Rank badge (#1, #2 etc) 
+  * Candidate ID
+  * Current Title + Company
+  * Years of experience
+  * Location + Relocation status
+  * Score breakdown: 5 colored progress bars 
+    (Semantic | Experience | Skills | Behavioral | Final)
+  * Reasoning text in italic
+  * Disqualifier tag if flagged (red badge: "KEYWORD STUFFER" or "CONSULTING ONLY" etc)
+- Download CSV button: downloads exact submission format 
+  (candidate_id, rank, score, reasoning)
+
+=== CODE QUALITY REQUIREMENTS ===
+- Type hints on EVERY function signature
+- Google-style docstrings on every class and method
+- Zero print() anywhere — only import logging; logger = logging.getLogger(__name__)
+- All constants in config.py — zero magic strings or numbers in other files
+- Every function validates its inputs and raises ValueError with clear message if invalid
+- All file I/O wrapped in try/except with logger.error() on failure
+- Pytest tests must achieve >80% coverage
+- requirements.txt must have pinned versions (e.g. flask==3.0.3 not flask>=3)
+
+=== TESTS ===
+Write these tests:
+- test_parsers.py: test valid JSON loads, test valid JSONL loads, 
+  test missing required fields raises error, test malformed JSON raises error
+- test_scorers.py: test each scorer returns float 0.0-1.0, 
+  test consulting-only candidate scores low on experience, 
+  test candidate with vector DB skills scores high on skill scorer
+- test_disqualifier.py: test HR Manager with AI keywords gets 0.05 multiplier, 
+  test honeypot with 600-month role gets 0.0 multiplier, 
+  test clean candidate gets 1.0 multiplier
+- test_ranker.py: test output is sorted descending by score, 
+  test ranks are unique integers 1-N, test no duplicate candidate_ids
+- test_integration.py: load sample of 10 mock candidates, run full pipeline, 
+  assert output CSV passes the validator rules (100 rows if 100 input, 
+  ranks 1-N unique, scores non-increasing)
+
+=== IMPORTANT ===
+- The model (all-MiniLM-L6-v2) downloads once on first run and caches locally
+- Flask API must handle both JSON array and JSONL format uploads
+- The ranking must complete in under 5 minutes for 500 candidates on CPU
+- No calls to OpenAI, Anthropic, or any external API during ranking
+- The CSV download must pass validate_submission.py rules exactly

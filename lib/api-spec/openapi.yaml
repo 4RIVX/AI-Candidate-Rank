@@ -1,15 +1,16 @@
 openapi: 3.1.0
 info:
-  # Do not change the title, if the title changes, the import paths will be broken
   title: Api
   version: 0.1.0
-  description: API specification
+  description: Redrob AI Candidate Ranking API
 servers:
   - url: /api
     description: Base API path
 tags:
   - name: health
     description: Health operations
+  - name: ranking
+    description: Candidate ranking operations
 paths:
   /healthz:
     get:
@@ -24,6 +25,55 @@ paths:
             application/json:
               schema:
                 $ref: "#/components/schemas/HealthStatus"
+
+  /rank:
+    post:
+      operationId: rankCandidates
+      tags: [ranking]
+      summary: Rank candidates
+      description: >
+        Accepts a JSON array of candidate objects,
+        scores them across 5 dimensions, and returns a ranked list.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/RankInput"
+      responses:
+        "200":
+          description: Ranked candidates list
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/RankResponse"
+        "400":
+          description: Bad request - invalid data
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+        "500":
+          description: Internal server error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /rank/status:
+    get:
+      operationId: getRankingStatus
+      tags: [ranking]
+      summary: Get ranking engine status
+      description: Returns whether the ML model is loaded and ready
+      responses:
+        "200":
+          description: Engine status
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/EngineStatus"
+
 components:
   schemas:
     HealthStatus:
@@ -31,6 +81,161 @@ components:
       properties:
         status:
           type: string
+        python_backend:
+          type: string
+        model_loaded:
+          type: boolean
       required:
         - status
 
+    RankInput:
+      type: object
+      properties:
+        candidates:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+          description: Array of candidate objects
+        top_n:
+          type: integer
+          description: Number of top candidates to display (default 25)
+          default: 25
+      required:
+        - candidates
+
+    ScoreBreakdown:
+      type: object
+      properties:
+        semantic:
+          type: number
+          description: Semantic similarity score (0-1)
+        experience:
+          type: number
+          description: Experience score (0-1)
+        skill:
+          type: number
+          description: Skill match score (0-1)
+        behavioral:
+          type: number
+          description: Behavioral/signals score (0-1)
+        final:
+          type: number
+          description: Final weighted score (0-1)
+        disqualifier_multiplier:
+          type: number
+          description: Disqualifier penalty multiplier (0-1)
+        disqualifier_flag:
+          type: ["string", "null"]
+          description: Disqualifier label if flagged
+      required:
+        - semantic
+        - experience
+        - skill
+        - behavioral
+        - final
+        - disqualifier_multiplier
+
+    RankedCandidate:
+      type: object
+      properties:
+        rank:
+          type: integer
+        candidate_id:
+          type: string
+        current_title:
+          type: ["string", "null"]
+        current_company:
+          type: ["string", "null"]
+        years_of_experience:
+          type: ["number", "null"]
+        location:
+          type: ["string", "null"]
+        willing_to_relocate:
+          type: ["boolean", "null"]
+        score:
+          type: number
+        scores:
+          $ref: "#/components/schemas/ScoreBreakdown"
+        reasoning:
+          type: string
+      required:
+        - rank
+        - candidate_id
+        - score
+        - scores
+        - reasoning
+
+    ScoreBucket:
+      type: object
+      properties:
+        range:
+          type: string
+        count:
+          type: integer
+      required:
+        - range
+        - count
+
+    RankStats:
+      type: object
+      properties:
+        profiles_loaded:
+          type: integer
+        candidates_ranked:
+          type: integer
+        top_score:
+          type: number
+        disqualified_count:
+          type: integer
+        score_distribution:
+          type: array
+          items:
+            $ref: "#/components/schemas/ScoreBucket"
+      required:
+        - profiles_loaded
+        - candidates_ranked
+        - top_score
+        - disqualified_count
+        - score_distribution
+
+    RankResponse:
+      type: object
+      properties:
+        candidates:
+          type: array
+          items:
+            $ref: "#/components/schemas/RankedCandidate"
+        stats:
+          $ref: "#/components/schemas/RankStats"
+        processing_time_seconds:
+          type: number
+      required:
+        - candidates
+        - stats
+        - processing_time_seconds
+
+    EngineStatus:
+      type: object
+      properties:
+        ready:
+          type: boolean
+        model_loaded:
+          type: boolean
+        model_name:
+          type: string
+        message:
+          type: string
+      required:
+        - ready
+        - model_loaded
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+        detail:
+          type: ["string", "null"]
+      required:
+        - error

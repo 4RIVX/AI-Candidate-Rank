@@ -1,36 +1,52 @@
-# [Project name]
+# Redrob AI Ranker
 
-_Replace the heading above with the project's name, and this line with one sentence describing what this app does for users._
+AI-powered candidate ranking system that scores resumes against a job description using semantic similarity, experience, skills, behavioral signals, and disqualifier detection.
 
 ## Run & Operate
 
-- `pnpm --filter @workspace/api-server run dev` — run the API server (port 5000)
+- `pnpm --filter @workspace/api-server run dev` — run the API server (port 8080)
 - `pnpm run typecheck` — full typecheck across all packages
 - `pnpm run build` — typecheck + build all packages
 - `pnpm --filter @workspace/api-spec run codegen` — regenerate API hooks and Zod schemas from the OpenAPI spec
-- `pnpm --filter @workspace/db run push` — push DB schema changes (dev only)
-- Required env: `DATABASE_URL` — Postgres connection string
+- Flask backend: `cd artifacts/flask-ranker && python3 app.py`
+- Required env: `DATABASE_URL` — Postgres connection string (not required for ranking — stateless)
 
 ## Stack
 
 - pnpm workspaces, Node.js 24, TypeScript 5.9
-- API: Express 5
-- DB: PostgreSQL + Drizzle ORM
-- Validation: Zod (`zod/v4`), `drizzle-zod`
-- API codegen: Orval (from OpenAPI spec)
+- **Frontend**: React + Vite (dark violet/indigo theme), TanStack Query
+- **Backend**: Python 3.11 + Flask 3, served at `/api`
+- **Scoring**: TF-IDF cosine similarity (fallback for semantic), scikit-learn, rank-bm25
+- **Semantic scorer**: Auto-loads sentence-transformers/all-MiniLM-L6-v2 if available; falls back to TF-IDF
 - Build: esbuild (CJS bundle)
 
 ## Where things live
 
-_Populate as you build — short repo map plus pointers to the source-of-truth file for DB schema, API contracts, theme files, etc._
+- `artifacts/redrob-frontend/` — React + Vite frontend app
+- `artifacts/flask-ranker/` — Python Flask backend
+  - `app.py` — Flask entrypoint, serves `/api/healthz`, `/api/rank`, `/api/rank/status`, `/api/rank/download`
+  - `src/config.py` — job description & scoring weights
+  - `src/scoring/` — 5 scoring modules (semantic, experience, skill, behavioral, disqualifier)
+  - `src/ranker/` — hybrid ranker + reasoning generator
+  - `src/parsers/` — candidate JSON/JSONL parser
+- `lib/api-spec/openapi.yaml` — OpenAPI spec (source of truth for API contract)
+- `lib/api-client-react/` — generated TanStack Query hooks and Zod schemas
 
 ## Architecture decisions
 
-_Populate as you build — non-obvious choices a reader couldn't infer from the code (3-5 bullets)._
+- **Stateless API**: No database — ranking is computed on-demand, no persistence needed.
+- **TF-IDF fallback**: Semantic scorer gracefully degrades to TF-IDF cosine similarity when `sentence-transformers` is unavailable (Nix install restriction).
+- **Hybrid scoring**: Weighted combination of semantic (0.35), experience (0.25), skills (0.30), behavioral (0.10) with disqualifier multiplier.
+- **Contract-first**: OpenAPI spec in `lib/api-spec` drives codegen for both client hooks and Zod validators.
+- **Path-based routing**: Flask at `/api`, React at `/` — shared proxy routes by path prefix.
 
 ## Product
 
-_Describe the high-level user-facing capabilities of this app once they exist._
+- Upload JSON or JSONL files of candidate profiles
+- System ranks candidates against a configurable job description
+- Each candidate gets: overall score (0-100), per-dimension scores, AI-generated reasoning
+- Download ranked results as CSV
+- Score distribution chart and summary statistics panel
 
 ## User preferences
 
@@ -38,7 +54,10 @@ _Populate as you build — explicit user instructions worth remembering across s
 
 ## Gotchas
 
-_Populate as you build — sharp edges, "always run X before Y" rules._
+- `sentence-transformers` cannot be installed via Nix package manager (PEP 668 + dependency resolver). Semantic scorer auto-falls back to TF-IDF.
+- Flask runs via `bash /home/runner/workspace/artifacts/flask-ranker/start.sh` (absolute path required — workflow runs from different cwd).
+- Job description and scoring weights are hardcoded in `src/config.py` — change there to reconfigure.
+- Model loads lazily on first `/api/rank` request (not at startup).
 
 ## Pointers
 
