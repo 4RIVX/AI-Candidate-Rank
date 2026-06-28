@@ -249,14 +249,47 @@ def get_multiplier(candidate: dict[str, Any]) -> tuple[float, str | None]:
     if _is_honeypot(candidate):
         return HONEYPOT_MULTIPLIER, "HONEYPOT"
 
-    title = str(candidate.get("current_title") or "").lower()
-    _HARD_DISQUALIFY_TITLES: list[str] = [
-        "marketing", "sales", " hr ", "human resource", "content writer",
-        "designer", " qa ", "quality assurance", "accountant", "operations",
-        "supply chain", "customer support", "recruiter", "finance",
+    _HARD_DISQUALIFY_TITLE_KEYWORDS: list[str] = [
+        "marketing", "sales", "content writer", "content writing",
+        "designer", "human resource", " hr ", "accountant",
+        "recruiter", "operations", "supply chain", "customer support",
+        "customer service", "finance",
     ]
-    if any(kw in f" {title} " for kw in _HARD_DISQUALIFY_TITLES):
-        return 0.08, "NON-TECHNICAL ROLE"
+
+    def _title_is_non_technical(t: str) -> bool:
+        padded = f" {t.lower()} "
+        return any(kw in padded for kw in _HARD_DISQUALIFY_TITLE_KEYWORDS)
+
+    # Collect all titles: current + every career role title
+    all_titles: list[str] = []
+    current_title_val = str(candidate.get("current_title") or "")
+    if current_title_val:
+        all_titles.append(current_title_val)
+    for role in candidate.get("career_history") or []:
+        if isinstance(role, dict):
+            role_title = str(role.get("title") or role.get("role_title") or role.get("position") or "")
+            if role_title:
+                all_titles.append(role_title)
+
+    any_non_technical = any(_title_is_non_technical(t) for t in all_titles)
+
+    if any_non_technical:
+        # Gate: only apply 0.08 if the candidate also has zero hard required skills
+        from src.config import HARD_REQUIRED_SKILLS
+        skills = candidate.get("skills") or []
+        skill_text = " ".join(
+            str(s.get("name") or s if isinstance(s, dict) else s).lower()
+            for s in skills
+        )
+        career_text = " ".join(
+            str(role.get("description") or "").lower()
+            for role in (candidate.get("career_history") or [])
+            if isinstance(role, dict)
+        )
+        full_text = skill_text + " " + career_text
+        has_hard_skill = any(hs.lower() in full_text for hs in HARD_REQUIRED_SKILLS)
+        if not has_hard_skill:
+            return 0.08, "NON-TECHNICAL ROLE"
 
     if _is_off_target_specialist(candidate):
         if OFF_TARGET_SPECIALIST_MULTIPLIER < multiplier:
