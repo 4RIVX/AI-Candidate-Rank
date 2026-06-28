@@ -19,7 +19,10 @@ from src.config import (
     KEYWORD_STUFFER_AI_SKILL_THRESHOLD,
     KEYWORD_STUFFER_MULTIPLIER,
     LOCATION_PENALTY_MULTIPLIER,
+    NLP_RETRIEVAL_SKILLS,
     NON_AI_JOB_TITLES,
+    OFF_TARGET_SPECIALIST_MULTIPLIER,
+    OFF_TARGET_TOP_SKILLS,
     PRODUCTION_KEYWORDS,
     RESEARCH_KEYWORDS,
     RESEARCH_ONLY_MULTIPLIER,
@@ -156,6 +159,53 @@ def _is_honeypot(candidate: dict[str, Any]) -> bool:
     return False
 
 
+def _is_off_target_specialist(candidate: dict[str, Any]) -> bool:
+    """Detect candidates whose primary expertise is off-target for this role.
+
+    Applies when the candidate's top (most-listed) skill belongs to an
+    irrelevant domain (e.g. Figma, OpenCV, Angular) AND they have zero
+    NLP/retrieval skills anywhere in their profile.
+
+    Args:
+        candidate: A candidate dict.
+
+    Returns:
+        True if the off-target specialist pattern is detected.
+    """
+    skills = candidate.get("skills") or []
+    skill_names: list[str] = []
+    for skill in skills:
+        if isinstance(skill, dict):
+            name = str(skill.get("name") or skill.get("skill_name") or "").lower()
+            if name:
+                skill_names.append(name)
+        elif isinstance(skill, str):
+            skill_names.append(skill.lower())
+
+    if not skill_names:
+        return False
+
+    # Top skill = the first listed skill (assumed most prominent)
+    top_skill = skill_names[0]
+    top_is_off_target = any(ot in top_skill for ot in OFF_TARGET_TOP_SKILLS)
+    if not top_is_off_target:
+        return False
+
+    # Build full text for NLP/retrieval skill search (skills + career + summary)
+    all_skill_text = " ".join(skill_names)
+    career_history = candidate.get("career_history") or []
+    career_text = " ".join(
+        str(role.get("description") or "").lower()
+        for role in career_history
+        if isinstance(role, dict)
+    )
+    summary_text = str(candidate.get("summary") or "").lower()
+    full_text = f"{all_skill_text} {career_text} {summary_text}"
+
+    has_nlp_retrieval = any(kw in full_text for kw in NLP_RETRIEVAL_SKILLS)
+    return not has_nlp_retrieval
+
+
 def _location_penalty_applies(candidate: dict[str, Any]) -> bool:
     """Check if the location penalty should be applied.
 
@@ -198,6 +248,11 @@ def get_multiplier(candidate: dict[str, Any]) -> tuple[float, str | None]:
 
     if _is_honeypot(candidate):
         return HONEYPOT_MULTIPLIER, "HONEYPOT"
+
+    if _is_off_target_specialist(candidate):
+        if OFF_TARGET_SPECIALIST_MULTIPLIER < multiplier:
+            multiplier = OFF_TARGET_SPECIALIST_MULTIPLIER
+            flag = "OFF-TARGET SPECIALIST"
 
     if _is_keyword_stuffer(candidate):
         if KEYWORD_STUFFER_MULTIPLIER < multiplier:

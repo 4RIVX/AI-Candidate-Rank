@@ -172,11 +172,14 @@ export default function Home() {
       {/* Sidebar */}
       <div className="w-80 border-r border-border bg-sidebar flex flex-col shrink-0 relative z-10">
         <div className="p-6 border-b border-border">
-          <div className="flex items-center gap-2 mb-2">
+          <div className="flex items-center gap-2 mb-3">
             <Zap className="h-6 w-6 text-primary" />
-            <h1 className="text-xl font-bold tracking-tight text-white">Redrob AI Ranker</h1>
+            <h1 className="text-xl font-bold tracking-tight text-white">AI CANDIDATE RANKER</h1>
           </div>
-          <p className="text-xs text-muted-foreground font-mono">Semantic + Behavioral Hybrid (CPU, offline)</p>
+          <div className="flex items-center gap-2 px-3 py-2 rounded-md bg-primary/10 border border-primary/30">
+            <Briefcase className="h-3.5 w-3.5 text-primary shrink-0" />
+            <span className="text-[11px] font-semibold text-primary leading-tight">Matching for: Senior AI Engineer — Redrob AI (Pune/Noida)</span>
+          </div>
         </div>
 
         <div className="p-6 flex-1 flex flex-col gap-6 overflow-y-auto">

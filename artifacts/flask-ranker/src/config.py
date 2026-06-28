@@ -176,3 +176,39 @@ LOCATION_PENALTY_MULTIPLIER: float = 0.7
 INDIA_COUNTRY_VALUES: list[str] = ["india", "in"]
 
 CLEAN_MULTIPLIER: float = 1.0
+
+# ── Off-target specialist disqualifier ────────────────────────────────────────
+OFF_TARGET_TOP_SKILLS: list[str] = [
+    "opencv",
+    "computer vision",
+    "figma",
+    "photoshop",
+    "content writing",
+    "angular",
+    "next.js",
+    "nextjs",
+]
+
+NLP_RETRIEVAL_SKILLS: list[str] = [
+    "nlp",
+    "retrieval",
+    "rag",
+    "embedding",
+    "embeddings",
+    "vector",
+    "llm",
+    "bert",
+    "transformer",
+    "semantic search",
+    "ranking",
+    "ranker",
+    "reranking",
+    "faiss",
+    "pinecone",
+    "weaviate",
+    "qdrant",
+    "milvus",
+    "opensearch",
+]
+
+OFF_TARGET_SPECIALIST_MULTIPLIER: float = 0.3
