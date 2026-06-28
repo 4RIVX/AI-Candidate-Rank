@@ -15,52 +15,71 @@ from typing import Any
 
 logger = logging.getLogger(__name__)
 
-_ACHIEVEMENT_KEYWORDS: list[str] = [
-    "built", "deployed", "led", "improved", "launched", "reduced",
-    "increased", "designed", "architected", "scaled", "shipped",
-    "created", "developed", "trained", "fine-tuned", "indexed",
-    "served", "implemented", "established", "optimized", "achieved",
-    "delivered", "automated", "migrated", "integrated", "published",
-    "contributed", "founded", "grew",
+_JD_KEYWORDS: list[str] = [
+    "embeddings", "vector", "retrieval", "ranking", "deployed", "production",
+    "ml", "model", "inference", "search", "nlp", "pipeline", "a/b",
+    "evaluation",
 ]
 
 
-def _extract_achievement(candidate: dict[str, Any]) -> str | None:
-    """Extract one specific career achievement from descriptions or summary.
+def _score_sentence(sentence: str) -> int:
+    """Count how many JD keywords appear in a sentence (case-insensitive).
 
-    Looks for sentences containing concrete action verbs. Prefers career
-    history descriptions over the summary field.
+    Args:
+        sentence: A plain-text sentence.
+
+    Returns:
+        Integer keyword match count.
+    """
+    sl = sentence.lower()
+    return sum(1 for kw in _JD_KEYWORDS if kw in sl)
+
+
+def _extract_achievement(candidate: dict[str, Any]) -> str | None:
+    """Pick the single most JD-relevant sentence from career history or summary.
+
+    Scores every sentence across ALL career history descriptions by how many
+    JD keywords it contains, then returns the highest-scoring sentence. Falls
+    back to summary if career history is empty. Returns None (which the caller
+    converts to the "no AI/ML experience" note) when no sentence scores > 0.
 
     Args:
         candidate: A candidate dict.
 
     Returns:
-        A trimmed achievement sentence (max 130 chars), or None if not found.
+        The best-scoring sentence (max 130 chars), or None if nothing matched.
     """
-    def _best_sentence(text: str) -> str | None:
+    def _sentences(text: str) -> list[str]:
         cleaned = re.sub(r"\s+", " ", text.replace("\n", ". "))
-        sentences = [s.strip() for s in re.split(r"[.!?]", cleaned) if s.strip()]
-        for sentence in sentences:
-            sl = sentence.lower()
-            if any(kw in sl for kw in _ACHIEVEMENT_KEYWORDS) and len(sentence) > 25:
-                trimmed = sentence[:130]
-                return trimmed + ("…" if len(sentence) > 130 else "")
-        return None
+        return [s.strip() for s in re.split(r"[.!?]", cleaned) if len(s.strip()) > 20]
+
+    candidates_sentences: list[tuple[int, str]] = []
 
     career_history = candidate.get("career_history") or []
     for role in career_history:
         if isinstance(role, dict):
             desc = str(role.get("description") or "")
             if desc:
-                result = _best_sentence(desc)
-                if result:
-                    return result
+                for sentence in _sentences(desc):
+                    score = _score_sentence(sentence)
+                    if score > 0:
+                        candidates_sentences.append((score, sentence))
 
-    summary = str(candidate.get("summary") or "")
-    if summary:
-        return _best_sentence(summary)
+    # Fall back to summary only when career history produced nothing
+    if not candidates_sentences:
+        summary = str(candidate.get("summary") or "")
+        if summary:
+            for sentence in _sentences(summary):
+                score = _score_sentence(sentence)
+                if score > 0:
+                    candidates_sentences.append((score, sentence))
 
-    return None
+    if not candidates_sentences:
+        return None
+
+    # Return the highest-scoring sentence, trimmed to 130 chars
+    best = max(candidates_sentences, key=lambda t: t[0])[1]
+    return best[:130] + ("…" if len(best) > 130 else "")
 
 
 def _notice_label(signals: dict[str, Any]) -> str | None:

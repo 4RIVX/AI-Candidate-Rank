@@ -249,6 +249,15 @@ def get_multiplier(candidate: dict[str, Any]) -> tuple[float, str | None]:
     if _is_honeypot(candidate):
         return HONEYPOT_MULTIPLIER, "HONEYPOT"
 
+    title = str(candidate.get("current_title") or "").lower()
+    _HARD_DISQUALIFY_TITLES: list[str] = [
+        "marketing", "sales", " hr ", "human resource", "content writer",
+        "designer", " qa ", "quality assurance", "accountant", "operations",
+        "supply chain", "customer support", "recruiter", "finance",
+    ]
+    if any(kw in f" {title} " for kw in _HARD_DISQUALIFY_TITLES):
+        return 0.08, "NON-TECHNICAL ROLE"
+
     if _is_off_target_specialist(candidate):
         if OFF_TARGET_SPECIALIST_MULTIPLIER < multiplier:
             multiplier = OFF_TARGET_SPECIALIST_MULTIPLIER
