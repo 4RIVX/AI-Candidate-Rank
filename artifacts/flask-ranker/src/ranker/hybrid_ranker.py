@@ -85,7 +85,7 @@ def rank(
 
     # Sort: final score descending, then candidate_id ascending (tie-break)
     results.sort(
-        key=lambda r: (-r["_final_score"], str(r.get("candidate_id") or ""))
+        key=lambda r: (-round(r["_final_score"], 4), str(r.get("candidate_id") or ""))
     )
 
     for rank_pos, result in enumerate(results, start=1):
