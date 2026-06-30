@@ -196,6 +196,9 @@ export default function Home() {
           <div className="space-y-2">
             <label className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Candidate Data</label>
             <div 
+              role="button"
+              aria-label="Upload candidate JSON or JSONL file — click or drag and drop"
+              tabIndex={0}
               className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center gap-2 transition-colors cursor-pointer text-center ${fileName ? 'border-primary/50 bg-primary/5' : 'border-border hover:border-primary/50 hover:bg-muted/50'}`}
               onDragOver={handleDragOver}
               onDrop={handleDrop}
@@ -210,7 +213,7 @@ export default function Home() {
                 </>
               ) : (
                 <>
-                  <UploadCloud className="h-8 w-8 text-muted-foreground mb-1" />
+                  <UploadCloud className="h-8 w-8 text-muted-foreground mb-1" aria-hidden="true" />
                   <div className="text-sm font-medium">Drop JSON or JSONL file here</div>
                   <div className="text-xs text-muted-foreground">or click to browse</div>
                 </>
@@ -231,6 +234,7 @@ export default function Home() {
               min={10}
               step={5}
               className="py-2"
+              aria-label={`Top N candidates to display: ${topN}`}
             />
           </div>
 
@@ -241,6 +245,7 @@ export default function Home() {
               onClick={rankCandidates}
               disabled={!candidates.length || isRanking}
               data-testid="button-rank-candidates"
+              aria-label={isRanking ? "Ranking candidates, please wait" : "Rank candidates"}
             >
               {isRanking ? (
                 <>

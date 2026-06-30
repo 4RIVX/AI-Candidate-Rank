@@ -11,10 +11,10 @@ from src.config import (
 
 
 def test_hr_manager_with_ai_keywords_gets_low_multiplier(hr_keyword_stuffer):
-    """HR Manager with many AI keywords should get keyword-stuffer multiplier."""
+    """HR Manager title triggers NON-TECHNICAL ROLE disqualifier (priority over keyword-stuffer)."""
     multiplier, flag = get_multiplier(hr_keyword_stuffer)
-    assert multiplier == KEYWORD_STUFFER_MULTIPLIER
-    assert flag == "KEYWORD STUFFER"
+    assert multiplier == 0.08
+    assert flag == "NON-TECHNICAL ROLE"
 
 
 def test_honeypot_gets_zero_multiplier(honeypot_candidate):

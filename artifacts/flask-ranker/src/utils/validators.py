@@ -17,9 +17,13 @@ def validate_candidate(candidate: dict[str, Any], index: int) -> None:
         ValueError: If the candidate is missing the required candidate_id field.
     """
     if not isinstance(candidate, dict):
-        raise ValueError(f"Candidate at index {index} must be a dict, got {type(candidate)}")
+        raise ValueError(
+            f"Candidate at index {index} must be a dict, got {type(candidate)}"
+        )
     if "candidate_id" not in candidate:
-        raise ValueError(f"Candidate at index {index} is missing required field 'candidate_id'")
+        raise ValueError(
+            f"Candidate at index {index} is missing required field 'candidate_id'"
+        )
 
 
 def validate_candidates_list(candidates: list[dict[str, Any]]) -> None:

@@ -38,11 +38,16 @@ def health_check() -> tuple[Response, int]:
     Returns:
         JSON with status and model load state.
     """
-    return jsonify({
-        "status": "ok",
-        "python_backend": "flask",
-        "model_loaded": semantic_scorer.is_model_loaded(),
-    }), 200
+    return (
+        jsonify(
+            {
+                "status": "ok",
+                "python_backend": "flask",
+                "model_loaded": semantic_scorer.is_model_loaded(),
+            }
+        ),
+        200,
+    )
 
 
 @app.get("/api/rank/status")
@@ -53,12 +58,21 @@ def get_ranking_status() -> tuple[Response, int]:
         JSON with ready flag, model_loaded, and model_name.
     """
     loaded = semantic_scorer.is_model_loaded()
-    return jsonify({
-        "ready": loaded,
-        "model_loaded": loaded,
-        "model_name": "all-MiniLM-L6-v2",
-        "message": "Model ready" if loaded else "Model not yet loaded — will load on first rank request",
-    }), 200
+    return (
+        jsonify(
+            {
+                "ready": loaded,
+                "model_loaded": loaded,
+                "model_name": "all-MiniLM-L6-v2",
+                "message": (
+                    "Model ready"
+                    if loaded
+                    else "Model not yet loaded — will load on first rank request"
+                ),
+            }
+        ),
+        200,
+    )
 
 
 @app.post("/api/rank")
@@ -77,7 +91,15 @@ def rank_candidates() -> tuple[Response, int]:
 
         raw_candidates = body.get("candidates")
         if raw_candidates is None:
-            return jsonify({"error": "Missing 'candidates' field in request body", "detail": None}), 400
+            return (
+                jsonify(
+                    {
+                        "error": "Missing 'candidates' field in request body",
+                        "detail": None,
+                    }
+                ),
+                400,
+            )
 
         top_n_raw = body.get("top_n", 25)
         try:
@@ -115,30 +137,37 @@ def rank_candidates() -> tuple[Response, int]:
 
         response_candidates = []
         for r in display_ranked:
-            response_candidates.append({
-                "rank": r["rank"],
-                "candidate_id": str(r.get("candidate_id") or ""),
-                "current_title": r.get("current_title") or r.get("headline"),
-                "current_company": _get_current_company(r),
-                "years_of_experience": r.get("years_of_experience"),
-                "location": r.get("location") or r.get("city"),
-                "willing_to_relocate": r.get("willing_to_relocate"),
-                "score": round(r["_final_score"], 4),
-                "scores": r["scores"],
-                "reasoning": r["reasoning"],
-            })
+            response_candidates.append(
+                {
+                    "rank": r["rank"],
+                    "candidate_id": str(r.get("candidate_id") or ""),
+                    "current_title": r.get("current_title") or r.get("headline"),
+                    "current_company": _get_current_company(r),
+                    "years_of_experience": r.get("years_of_experience"),
+                    "location": r.get("location") or r.get("city"),
+                    "willing_to_relocate": r.get("willing_to_relocate"),
+                    "score": round(r["_final_score"], 4),
+                    "scores": r["scores"],
+                    "reasoning": r["reasoning"],
+                }
+            )
 
-        return jsonify({
-            "candidates": response_candidates,
-            "stats": {
-                "profiles_loaded": profiles_loaded,
-                "candidates_ranked": len(ranked),
-                "top_score": round(top_score, 4),
-                "disqualified_count": disqualified_count,
-                "score_distribution": score_distribution,
-            },
-            "processing_time_seconds": round(elapsed, 2),
-        }), 200
+        return (
+            jsonify(
+                {
+                    "candidates": response_candidates,
+                    "stats": {
+                        "profiles_loaded": profiles_loaded,
+                        "candidates_ranked": len(ranked),
+                        "top_score": round(top_score, 4),
+                        "disqualified_count": disqualified_count,
+                        "score_distribution": score_distribution,
+                    },
+                    "processing_time_seconds": round(elapsed, 2),
+                }
+            ),
+            200,
+        )
 
     except Exception as exc:
         logger.error("Unexpected error in /api/rank: %s", exc, exc_info=True)
@@ -161,7 +190,15 @@ def download_ranked_csv() -> Response | tuple[Response, int]:
 
         raw_candidates = body.get("candidates")
         if raw_candidates is None:
-            return jsonify({"error": "Missing 'candidates' field in request body", "detail": None}), 400
+            return (
+                jsonify(
+                    {
+                        "error": "Missing 'candidates' field in request body",
+                        "detail": None,
+                    }
+                ),
+                400,
+            )
 
         try:
             candidates = load_candidates(raw_candidates)
@@ -176,18 +213,22 @@ def download_ranked_csv() -> Response | tuple[Response, int]:
         writer = csv.writer(output)
         writer.writerow(["candidate_id", "rank", "score", "reasoning"])
         for r in ranked:
-            writer.writerow([
-                r.get("candidate_id", ""),
-                r["rank"],
-                round(r["_final_score"], 4),
-                r.get("reasoning", ""),
-            ])
+            writer.writerow(
+                [
+                    r.get("candidate_id", ""),
+                    r["rank"],
+                    round(r["_final_score"], 4),
+                    r.get("reasoning", ""),
+                ]
+            )
 
         csv_content = output.getvalue()
         return Response(
             csv_content,
             mimetype="text/csv",
-            headers={"Content-Disposition": "attachment; filename=ranked_candidates.csv"},
+            headers={
+                "Content-Disposition": "attachment; filename=ranked_candidates.csv"
+            },
         )
 
     except Exception as exc:
@@ -239,6 +280,7 @@ def _build_score_distribution(scores: list[float]) -> list[dict[str, Any]]:
 
 if __name__ == "__main__":
     import os
+
     port = int(os.environ.get("FLASK_PORT", 5001))
     logger.info("Starting Flask Ranker on port %d", port)
     app.run(host="0.0.0.0", port=port, debug=False)
