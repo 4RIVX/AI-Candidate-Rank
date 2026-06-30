@@ -239,7 +239,7 @@ export default function Home() {
             <Button 
               className="w-full h-12 text-base font-bold bg-gradient-to-r from-primary to-accent hover:from-primary/90 hover:to-accent/90 text-white shadow-lg border-0 transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
               onClick={rankCandidates}
-              disabled={!candidates.length || isRanking || !status?.model_loaded}
+              disabled={!candidates.length || isRanking}
               data-testid="button-rank-candidates"
             >
               {isRanking ? (
