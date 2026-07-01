@@ -1,4 +1,4 @@
-# Security Notes — Redrob AI Candidate Ranker
+# Security Notes — AI Candidate Ranker
 
 ## Data handling
 
